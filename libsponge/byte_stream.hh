@@ -14,7 +14,7 @@ class ByteStream {
     // Your code here -- add private members as necessary.
 
     bool end_flag{};  // flag mark input end.
-    size_t capacity{};
+    size_t m_capacity{};
     size_t size{};
     BufferList stream{};
     size_t bytes_w{};

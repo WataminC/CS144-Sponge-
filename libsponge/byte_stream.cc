@@ -13,7 +13,7 @@
 using namespace std;
 
 ByteStream::ByteStream(const size_t capacity) {
-    this->capacity = capacity;
+    this->m_capacity = capacity;
 }
 
 size_t ByteStream::write(const string &data) {
@@ -44,6 +44,9 @@ string ByteStream::peek_output(const size_t len) const {
 //! \param[in] len bytes will be removed from the output side of the buffer
 void ByteStream::pop_output(const size_t len) {
     stream.remove_prefix(len);
+    size -= len;
+    bytes_r += len;
+
     return ;
 }
 
@@ -57,9 +60,6 @@ std::string ByteStream::read(const size_t len) {
         read_bytes = remain;
     string str = this->peek_output(read_bytes);
     this->pop_output(read_bytes);
-    bytes_r += read_bytes;
-
-    size -= read_bytes;
 
     return str;
 }
@@ -82,7 +82,7 @@ bool ByteStream::buffer_empty() const {
 }
 
 bool ByteStream::eof() const {
-    return size == 0;
+    return end_flag && size == 0;
 }
 
 size_t ByteStream::bytes_written() const {
@@ -94,5 +94,5 @@ size_t ByteStream::bytes_read() const {
 }
 
 size_t ByteStream::remaining_capacity() const {
-    return capacity-size;
+    return this->m_capacity-size;
 }
