@@ -2,6 +2,7 @@
 #define SPONGE_LIBSPONGE_BYTE_STREAM_HH
 
 #include <string>
+#include "buffer.hh"
 
 //! \brief An in-order byte stream.
 
@@ -11,6 +12,13 @@
 class ByteStream {
   private:
     // Your code here -- add private members as necessary.
+
+    bool end_flag{};  // flag mark input end.
+    size_t capacity{};
+    size_t size{};
+    BufferList stream{};
+    size_t bytes_w{};
+    size_t bytes_r{};
 
     // Hint: This doesn't need to be a sophisticated data structure at
     // all, but if any of your tests are taking longer than a second,
