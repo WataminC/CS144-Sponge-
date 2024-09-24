@@ -41,8 +41,13 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
         copy_index = willing;
     }
 
-    if (_output.buffer_size() + reassembler.size() + copy_data.size() > _capacity) {   // check does the data fix the capacity
-        return ;
+    size_t remain_size = _capacity - (_output.buffer_size() + reassembler.size());
+
+    if (copy_data.size() > remain_size) {   // check does the data fix the capacity
+        copy_data = copy_data.substr(0, remain_size);
+        if (copy_data.empty()) {
+            return ;
+        }
     }
 
     reassembler[copy_index] = std::move(copy_data);
