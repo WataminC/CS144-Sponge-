@@ -14,22 +14,14 @@ using namespace std;
 
 StreamReassembler::StreamReassembler(const size_t capacity) : _output(capacity), _capacity(capacity) {}
 
-// void StreamReassembler::push_stream(const string &data) {
-//     willing += data.size();
-//     _output.write(data);
-//     size +=
-
-//     while(_) {
-
-//     }
-// }
-
 //! \details This function accepts a substring (aka a segment) of bytes,
 //! possibly out-of-order, from the logical stream, and assembles any newly
 //! contiguous substrings and writes them into the output stream in order.
 void StreamReassembler::push_substring(const string &data, const size_t index, const bool eof) {
-    if (eof == true)
+    if (eof == true) {
         end_flag = eof;
+        total_write = index + data.size();
+    }
 
     if (data.empty()) {
         if (end_flag && reassembler.size() == 0) {
@@ -70,7 +62,7 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
 
             // Update the willing value and write to output
             willing += temp_str.size();
-            _output.write(temp_str);
+            bytes_writed += _output.write(temp_str);
         }
 
         if (temp_will == willing) {
@@ -79,7 +71,7 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
     }
 
 
-    if (end_flag && reassembler.size() == 0) {
+    if (end_flag && bytes_writed == total_write) {
         _output.end_input();
     }
 }

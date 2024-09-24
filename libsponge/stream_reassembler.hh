@@ -18,6 +18,8 @@ class StreamReassembler {
     size_t willing{};    // the next index that can be snitched to the stream 
     std::unordered_map<size_t, std::string> reassembler{};
     bool end_flag{};
+    size_t total_write{};
+    size_t bytes_writed{};
     // size_t size{};
 
   public:
