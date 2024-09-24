@@ -5,6 +5,7 @@
 // For Lab 2, please replace with a real implementation that passes the
 // automated checks run by `make check_lab2`.
 
+// Maybe need to install libpcap-dev library to start lab2
 template <typename... Targs>
 void DUMMY_CODE(Targs &&... /* unused */) {}
 
