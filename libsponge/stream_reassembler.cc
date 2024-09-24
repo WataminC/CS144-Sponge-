@@ -28,7 +28,8 @@ StreamReassembler::StreamReassembler(const size_t capacity) : _output(capacity),
 //! possibly out-of-order, from the logical stream, and assembles any newly
 //! contiguous substrings and writes them into the output stream in order.
 void StreamReassembler::push_substring(const string &data, const size_t index, const bool eof) {
-    end_flag = eof;
+    if (eof == true)
+        end_flag = eof;
 
     if (data.empty()) {
         if (end_flag && reassembler.size() == 0) {
@@ -50,37 +51,7 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
         return ;
     }
 
-    // size += data.size();
     reassembler[copy_index] = std::move(copy_data);
-
-    // Writing assembled block to the stream
-    // for (;;) {
-    //     // auto it = reassembler.find(willing);
-    //     // if (it == reassembler.end()) {
-    //     //     break;
-    //     // }
-    //     // std::string temp_str = std::move(it->second);
-    //     // reassembler.erase(it);
-
-    //     // willing += temp_str.size();
-    //     // _output.write(temp_str);
-    //     size_t temp_will = willing;
-    //     for (auto element = reassembler.begin(); element != reassembler.end(); element++) {
-    //         if (element->first > willing || element->first + element->second.size() - 1 < willing) {
-    //             continue;
-    //         }
-
-    //         std::string temp_str = std::move(element->second.substr(willing - element->first));
-    //         reassembler.erase(element);
-
-    //         willing += temp_str.size();
-    //         _output.write(temp_str);
-    //     }
-
-    //     if (temp_will == willing) {
-    //         break;
-    //     }
-    // }
 
     for (;;) {
         size_t temp_will = willing;
