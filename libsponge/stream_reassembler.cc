@@ -18,11 +18,13 @@ StreamReassembler::StreamReassembler(const size_t capacity) : _output(capacity),
 //! possibly out-of-order, from the logical stream, and assembles any newly
 //! contiguous substrings and writes them into the output stream in order.
 void StreamReassembler::push_substring(const string &data, const size_t index, const bool eof) {
+    // When writing stream length is bigger than the stream capacity
     if (eof == true) {
         end_flag = eof;
         total_write = index + data.size();
     }
 
+    // Stream should ignore the empty string
     if (data.empty()) {
         if (end_flag && reassembler.size() == 0) {
             _output.end_input();
@@ -33,8 +35,8 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
     string copy_data = data;
     size_t copy_index = index;
 
+    // Avoid overlapping
     if (index < willing && index + copy_data.size() - 1 >=index) {
-        // copy_data = copy_data.substr(willing - index);
         copy_data.erase(0, willing - index);
         copy_index = willing;
     }
@@ -49,17 +51,24 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
         size_t temp_will = willing;
         
         for (auto element = reassembler.begin(); element != reassembler.end(); /* no increment here */) {
-            if (element->first > willing || element->first + element->second.size() - 1 < willing) {
+            if (element->first > willing) {
                 ++element;  // Increment if not erasing
                 continue;
             }
 
-            // Get the substring from the element
-            std::string temp_str = element->second.substr(willing - element->first);
-            
+            size_t element_index = element->first;
+            std::string element_str = element->second;
+
             // Erase the element and update the iterator
             element = reassembler.erase(element);
 
+            if (element_index + element_str.size() - 1 < willing) {
+                continue;
+            }
+
+            // Get the substring from the element
+            std::string temp_str = element_str.substr(willing - element_index);
+            
             // Update the willing value and write to output
             willing += temp_str.size();
             bytes_writed += _output.write(temp_str);
@@ -77,7 +86,17 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
 }
 
 size_t StreamReassembler::unassembled_bytes() const {
-    return reassembler.size();
+    size_t size = 0;
+    std::unordered_map<size_t, bool> pos;
+    for (auto &item : reassembler) {
+        for (size_t index = 0; index < item.second.size(); ++index) {
+            if (!pos[index + item.first]) {
+                size += 1;
+                pos[index + item.first] = true;
+            }
+        }
+    }
+    return size;
 }
 
 bool StreamReassembler::empty() const {
