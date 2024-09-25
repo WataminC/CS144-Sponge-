@@ -47,9 +47,9 @@ uint64_t unwrap(WrappingInt32 n, WrappingInt32 isn, uint64_t checkpoint) {
     else if (A <= B) {
         return (times + 1) * max_number + A;
     }
-    else {
-        if (times < 1)
-            return times * max_number + A;
+    else if (times < 1) { // A > B but B smaller than the max_number
+        return times * max_number + A;
+    } else {
         return (times - 1) * max_number + A;
     }
 
