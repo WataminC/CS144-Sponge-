@@ -105,5 +105,5 @@ size_t StreamReassembler::unassembled_bytes() const {
 }
 
 bool StreamReassembler::empty() const {
-    return reassembler.size() == 0;
+    return _output.buffer_size() + reassembler.size() == 0;
 }
