@@ -15,14 +15,25 @@ void TCPReceiver::segment_received(const TCPSegment &seg) {
     // DUMMY_CODE(seg);
     TCPHeader header = seg.header(); 
     Buffer payload = seg.payload();
+    bool end_flag = false;
 
     if(header.syn) {
         isn = header.seqno;
     }
 
-    
+    if (header.fin) {
+        end_flag = true;
+    }
+
+    _reassembler.push_substring(payload.copy(), unwrap(header.seqno, isn, 0), end_flag);
 }
 
-optional<WrappingInt32> TCPReceiver::ackno() const { return {}; }
+optional<WrappingInt32> TCPReceiver::ackno() const {
+    if (!isn.raw_value()) 
+        return std::nullopt; 
+    return wrap(_reassembler.stream_out().bytes_written(), isn);
+}
 
-size_t TCPReceiver::window_size() const { return {}; }
+size_t TCPReceiver::window_size() const { 
+    return _reassembler.stream_out().remaining_capacity();
+}

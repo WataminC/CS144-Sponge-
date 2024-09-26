@@ -4,6 +4,7 @@
         "stdexcept": "cpp",
         "system_error": "cpp",
         "*.tcc": "cpp",
-        "string_view": "cpp"
+        "string_view": "cpp",
+        "optional": "cpp"
     }
 }
