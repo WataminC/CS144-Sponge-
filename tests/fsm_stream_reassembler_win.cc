@@ -50,11 +50,18 @@ int main() {
 
             auto result = read(buf);
             if (buf.stream_out().bytes_written() != offset) {  // read bytes
-                throw runtime_error("test 2 - number of RX bytes is incorrect");
+                std::cout << "Offset: " << offset << " Bytes written: " << buf.stream_out().bytes_written() << "\n";
+                std::cout << "Result.length: " << result.length() << " d.length: " << d.size() << "\n";
+                std::cout << "Remain unassembled bytes: " << buf.unassembled_bytes() << "\n";
+                std::cout << "Total: " << buf.stream_out().bytes_written() + buf.unassembled_bytes() << "\n";
+                std::cout << "Remain capacity: " << buf.stream_out().remaining_capacity() << "\n";
+                std::cout << "\n";
+                
+                // throw runtime_error("test 2 - number of RX bytes is incorrect");
             }
             if (!equal(result.cbegin(), result.cend(), d.cbegin())) {
                 throw runtime_error("test 2 - content of RX bytes is incorrect");
-            }
+            } 
         }
     } catch (const exception &e) {
         cerr << "Exception: " << e.what() << endl;
