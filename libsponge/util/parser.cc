@@ -23,6 +23,7 @@ void NetParser::_check_size(const size_t size) {
     }
 }
 
+// Parse the number from string to numeric digit
 template <typename T>
 T NetParser::_parse_int() {
     constexpr size_t len = sizeof(T);
@@ -50,6 +51,7 @@ void NetParser::remove_prefix(const size_t n) {
     _buffer.remove_prefix(n);
 }
 
+// Push the val's bytes from the most significant byte to least significant byte
 template <typename T>
 void NetUnparser::_unparse_int(string &s, T val) {
     constexpr size_t len = sizeof(T);
