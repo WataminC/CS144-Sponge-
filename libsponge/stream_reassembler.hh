@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <sstream>
+#include <iostream>
 
 //! \brief A class that assembles a series of excerpts from a byte stream (possibly out of order,
 //! possibly overlapping) into an in-order byte stream.
@@ -20,6 +22,7 @@ class StreamReassembler {
     bool end_flag{};
     size_t total_write{};
     size_t bytes_writed{};
+    std::stringstream ss{};
     // size_t size{};
 
   public:
@@ -55,6 +58,8 @@ class StreamReassembler {
     //! \brief Is the internal state empty (other than the output stream)?
     //! \returns `true` if no substrings are waiting to be assembled
     bool empty() const;
+
+    std::string log_stream() const;
 };
 
 #endif  // SPONGE_LIBSPONGE_STREAM_REASSEMBLER_HH
