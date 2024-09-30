@@ -20,9 +20,30 @@ void TCPReceiver::segment_received(const TCPSegment &seg) {
         isn = header.seqno;
     }
 
-    
+    bool end_flag = false;
+    if (header.fin) {
+        end_flag = true;
+    }
+
+
+    if (isn.has_value()) {
+        size_t str_index = 0;
+        if (!header.syn) {
+            str_index = unwrap(header.seqno, isn.value(), 0) - 1;
+        }
+        _reassembler.push_substring(payload.copy(), str_index, end_flag);
+    } else {
+        throw runtime_error("Isn hasn't been set!!!");
+    }
 }
 
-optional<WrappingInt32> TCPReceiver::ackno() const { return {}; }
+optional<WrappingInt32> TCPReceiver::ackno() const {
+    if (!isn.has_value()) {
+        return std::nullopt;
+    }
+    return wrap(_reassembler.stream_out().bytes_written() + 1, isn.value());
+}
 
-size_t TCPReceiver::window_size() const { return {}; }
+size_t TCPReceiver::window_size() const {
+    return _capacity - _reassembler.stream_out().buffer_size();
+}
