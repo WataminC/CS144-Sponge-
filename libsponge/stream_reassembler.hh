@@ -20,7 +20,6 @@ class StreamReassembler {
     bool end_flag{};
     size_t total_write{};
     size_t bytes_writed{};
-    // size_t size{};
 
   public:
     //! \brief Construct a `StreamReassembler` that will store up to `capacity` bytes.
