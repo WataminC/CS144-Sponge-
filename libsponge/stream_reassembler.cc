@@ -109,16 +109,6 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
         }
     }
 
-    // If there exist the same index
-    // if (reassembler.find(copy_index) != reassembler.end()) {
-    //     if (reassembler[copy_index].size() < copy_data.size()) {
-    //         reassembler[copy_index] = std::move(copy_data);
-    //     }
-    // } 
-    // else {
-    //     reassembler[copy_index] = std::move(copy_data);
-    // }
-
     auto [it, inserted] = reassembler.emplace(std::make_pair(copy_index, (copy_data)));
     if (!inserted && (it->second.size() < copy_data.size())) {
         it->second = std::move(copy_data);
