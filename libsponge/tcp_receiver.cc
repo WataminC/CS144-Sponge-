@@ -6,13 +6,10 @@
 // automated checks run by `make check_lab2`.
 
 // Maybe need to install libpcap-dev library to start lab2
-// template <typename... Targs>
-// void DUMMY_CODE(Targs &&... /* unused */) {}
 
 using namespace std;
 
 void TCPReceiver::segment_received(const TCPSegment &seg) {
-    // DUMMY_CODE(seg);
     TCPHeader header = seg.header(); 
     Buffer payload = seg.payload();
 
@@ -21,7 +18,7 @@ void TCPReceiver::segment_received(const TCPSegment &seg) {
     }
 
     bool end_flag = false;
-    if (header.fin) {
+    if (header.fin && isn.has_value()) {
         end_flag = true;
     }
 
@@ -32,8 +29,6 @@ void TCPReceiver::segment_received(const TCPSegment &seg) {
             str_index = unwrap(header.seqno, isn.value(), 0) - 1;
         }
         _reassembler.push_substring(payload.copy(), str_index, end_flag);
-    } else {
-        throw runtime_error("Isn hasn't been set!!!");
     }
 }
 
@@ -41,7 +36,8 @@ optional<WrappingInt32> TCPReceiver::ackno() const {
     if (!isn.has_value()) {
         return std::nullopt;
     }
-    return wrap(_reassembler.stream_out().bytes_written() + 1, isn.value());
+    bool end = _reassembler.stream_out().input_ended();
+    return wrap(_reassembler.stream_out().bytes_written() + 1 + end, isn.value());
 }
 
 size_t TCPReceiver::window_size() const {

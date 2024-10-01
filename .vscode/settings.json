@@ -4,6 +4,8 @@
         "stdexcept": "cpp",
         "system_error": "cpp",
         "*.tcc": "cpp",
-        "string_view": "cpp"
+        "string_view": "cpp",
+        "memory_resource": "cpp",
+        "functional": "cpp"
     }
 }
