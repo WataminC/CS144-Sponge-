@@ -56,6 +56,10 @@ uint64_t TCPSender::bytes_in_flight() const {
 
 void TCPSender::fill_window() {
     while (!_stream.empty()) {
+        if (!_window_size) {
+            break;
+        }
+
         TCPHeader header;
         size_t length = 0;
 
@@ -69,8 +73,12 @@ void TCPSender::fill_window() {
             length++;
         }
 
-        size_t byte2read = 0;
-        
+        size_t byte2read = _window_size - length;
+        if (byte2read >=  TCPConfig::MAX_PAYLOAD_SIZE) {
+            byte2read = TCPConfig::MAX_PAYLOAD_SIZE;
+        }
+
+        Buffer payload = _stream.read(byte2read);
     }
 }
 
