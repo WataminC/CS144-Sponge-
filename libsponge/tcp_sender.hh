@@ -51,6 +51,7 @@ class TCPSender {
     uint64_t outstanding_bytes;
     unsigned int consecutive_retran;
     unsigned int rto;
+    uint16_t _window_size;
 
   public:
     //! Initialize a TCPSender

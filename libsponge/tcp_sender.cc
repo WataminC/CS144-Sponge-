@@ -54,11 +54,32 @@ uint64_t TCPSender::bytes_in_flight() const {
     return outstanding_bytes;
 }
 
-void TCPSender::fill_window() {}
+void TCPSender::fill_window() {
+    while (!_stream.empty()) {
+        TCPHeader header;
+        size_t length = 0;
+
+        if (!_stream.read_count()) {
+            header.syn = true;
+            length++;
+        }
+
+        if (_stream.eof) {
+            header.fin = true;
+            length++;
+        }
+
+        size_t byte2read = 0;
+        
+    }
+}
 
 //! \param ackno The remote receiver's ackno (acknowledgment number)
 //! \param window_size The remote receiver's advertised window size
-void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size) { DUMMY_CODE(ackno, window_size); }
+void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size) {
+    next_seqno = ackno;
+    _window_size = window_size;
+}
 
 //! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
 void TCPSender::tick(const size_t ms_since_last_tick) { DUMMY_CODE(ms_since_last_tick); }
