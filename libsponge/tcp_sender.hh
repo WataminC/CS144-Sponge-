@@ -21,7 +21,7 @@ class RetransmissionTimer {
     void start(const unsigned int timeout);
     void stop();
     bool is_running();
-    void time_passed(const size_t ms_since_last_tick, std::function<void> callback);
+    void time_passed(const size_t ms_since_last_tick, std::function<void()> callback);
 };
 
 //! \brief The "sender" part of a TCP implementation.
@@ -46,11 +46,16 @@ class TCPSender {
 
     //! the (absolute) sequence number for the next byte to be sent
     uint64_t _next_seqno{0};
+    std::queue<TCPSegment> _retransmission_queue;
 
     uint64_t outstanding_bytes;
     unsigned int consecutive_retran;
     unsigned int rto;
     uint16_t _window_size;
+
+    RetransmissionTimer timer;
+
+    void retransmit();
 
   public:
     //! Initialize a TCPSender

@@ -27,7 +27,7 @@ void RetransmissionTimer::stop() {
     running.store(false);
 }
 
-void RetransmissionTimer::time_passed(const size_t ms_since_last_tick, std::function<void> callback) {
+void RetransmissionTimer::time_passed(const size_t ms_since_last_tick, std::function<void()> callback) {
     if (!is_running)
         return ;
 
@@ -41,6 +41,11 @@ void RetransmissionTimer::time_passed(const size_t ms_since_last_tick, std::func
     callback();
 }
 
+void TCPSender::retransmit() {
+   TCPSegment segment = _retransmission_queue.front(); 
+    _retransmission_queue.front(); 
+    _segments_out.push(segment);
+}
 
 //! \param[in] capacity the capacity of the outgoing byte stream
 //! \param[in] retx_timeout the initial amount of time to wait before retransmitting the oldest outstanding segment
@@ -85,6 +90,11 @@ void TCPSender::fill_window() {
         segment.payload() = payload;
         
         _segments_out.push(segment);
+        _retransmission_queue.push(segment);
+
+        if (!timer.is_running()) {
+            timer.start(rto);
+        }
     }
 }
 
@@ -96,10 +106,28 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
 }
 
 //! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
-void TCPSender::tick(const size_t ms_since_last_tick) { DUMMY_CODE(ms_since_last_tick); }
+void TCPSender::tick(const size_t ms_since_last_tick) {
+    timer.time_passed(ms_since_last_tick, [this]() { this->retransmit(); });
+}
 
 unsigned int TCPSender::consecutive_retransmissions() const {
     return consecutive_retran;
 }
 
-void TCPSender::send_empty_segment() {}
+void TCPSender::send_empty_segment() {
+    TCPHeader header;
+
+    if (!_stream.bytes_read()) {
+        header.syn = true;
+    }
+
+    if (_stream.eof()) {
+        header.fin = true;
+    }
+
+    TCPSegment segment;
+    segment.header() = header;
+    
+    _segments_out.push(segment);
+    _retransmission_queue.push(segment);
+}
