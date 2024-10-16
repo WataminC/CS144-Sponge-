@@ -55,29 +55,43 @@ uint64_t TCPSender::bytes_in_flight() const {
 }
 
 void TCPSender::fill_window() {
-    while (!_stream.empty()) {
+    while (!_stream.buffer_empty()) {
+        if (!_window_size) {
+            break;
+        }
+
         TCPHeader header;
         size_t length = 0;
 
-        if (!_stream.read_count()) {
+        if (!_stream.bytes_read()) {
             header.syn = true;
             length++;
         }
 
-        if (_stream.eof) {
+        if (_stream.eof()) {
             header.fin = true;
             length++;
         }
 
-        size_t byte2read = 0;
+        size_t bytes2read = _window_size - length;
+        if (bytes2read >= TCPConfig::MAX_PAYLOAD_SIZE) {
+            bytes2read = TCPConfig::MAX_PAYLOAD_SIZE;
+        }
+
+        Buffer payload(std::move(_stream.read(bytes2read)));
+
+        TCPSegment segment;
+        segment.header() = header;
+        segment.payload() = payload;
         
+        _segments_out.push(segment);
     }
 }
 
 //! \param ackno The remote receiver's ackno (acknowledgment number)
 //! \param window_size The remote receiver's advertised window size
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size) {
-    next_seqno = ackno;
+    _next_seqno = unwrap(ackno, _isn, 0);
     _window_size = window_size;
 }
 
