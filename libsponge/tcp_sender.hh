@@ -46,15 +46,23 @@ class TCPSender {
 
     //! the (absolute) sequence number for the next byte to be sent
     uint64_t _next_seqno{0};
+
     std::optional<WrappingInt32> _last_retrans_seqno{0};
-    std::queue<TCPSegment> _retransmission_queue;
+    std::queue<TCPSegment> _retransmission_queue{};
 
     uint64_t _outstanding_bytes;
     unsigned int _consecutive_retran;
     unsigned int _rto;
     uint16_t _window_size;
+    WrappingInt32 _ack;
 
-    RetransmissionTimer timer;
+    enum {
+      INIT,
+      SYN_SENT,
+      FIN_SENT
+    } _state{};
+
+    RetransmissionTimer timer{};
 
     void retransmit();
 

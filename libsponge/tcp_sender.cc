@@ -28,7 +28,7 @@ void RetransmissionTimer::stop() {
 }
 
 void RetransmissionTimer::time_passed(const size_t ms_since_last_tick, std::function<void()> callback) {
-    if (!is_running)
+    if (!this->is_running())
         return ;
 
     std::chrono::milliseconds elapsed = std::chrono::milliseconds(ms_since_last_tick);
@@ -72,46 +72,54 @@ void TCPSender::retransmit() {
 TCPSender::TCPSender(const size_t capacity, const uint16_t retx_timeout, const std::optional<WrappingInt32> fixed_isn)
     : _isn(fixed_isn.value_or(WrappingInt32{random_device()()}))
     , _initial_retransmission_timeout{retx_timeout}
-    , _stream(capacity), _outstanding_bytes(0), _consecutive_retran(0), _rto(retx_timeout) {}
+    , _stream(capacity), _outstanding_bytes(0), _consecutive_retran(0), _rto(retx_timeout)
+    , _window_size{1}, _ack(_isn) {}
 
 uint64_t TCPSender::bytes_in_flight() const {
-    return _outstanding_bytes;
+    return _next_seqno - unwrap(_ack, _isn, 0);
 }
 
 void TCPSender::fill_window() {
-    while (!_stream.buffer_empty()) {
-        if (!_window_size) {
-            break;
-        }
-
+    while (_window_size && _state != FIN_SENT) {
         TCPHeader header;
-        size_t length = 0;
+        header.seqno = next_seqno();
 
-        if (!_stream.bytes_read()) {
+        size_t bytes2read = _window_size;
+        if (!_stream.bytes_read() && _state == INIT) {
             header.syn = true;
-            length++;
+            _next_seqno++; 
+            bytes2read--;
+            _state = SYN_SENT;
         }
 
-        if (_stream.eof()) {
-            header.fin = true;
-            length++;
-        }
-
-        size_t bytes2read = _window_size - length;
         if (bytes2read >= TCPConfig::MAX_PAYLOAD_SIZE) {
             bytes2read = TCPConfig::MAX_PAYLOAD_SIZE;
         }
 
+        if (_stream.eof() && _state == SYN_SENT) {
+            header.fin = true;
+            _next_seqno++; 
+            bytes2read--;
+            _state = FIN_SENT;
+        }
+
         Buffer payload(std::move(_stream.read(bytes2read)));
+
+        _next_seqno += payload.size();
 
         TCPSegment segment;
         segment.header() = header;
         segment.payload() = payload;
+
+        if (!segment.length_in_sequence_space())
+            break;
         
         _segments_out.push(segment);
         _retransmission_queue.push(segment);
 
-        if (!timer.is_running() && segment.length_in_sequence_space() - length > 0) {
+        _window_size -= segment.length_in_sequence_space();
+
+        if (!timer.is_running() && segment.payload().size() > 0) {
             timer.start(_rto);
         }
     }
@@ -120,12 +128,28 @@ void TCPSender::fill_window() {
 //! \param ackno The remote receiver's ackno (acknowledgment number)
 //! \param window_size The remote receiver's advertised window size
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size) {
-    _next_seqno = unwrap(ackno, _isn, 0);
+    _ack = ackno;
     _window_size = window_size;
 
-    // Remove the segment from the retransmission queue
+    // Reset rto
+    _rto = _initial_retransmission_timeout;
 
-    // Stop timer
+    TCPSegment element;
+    // Remove the segment from the retransmission queue
+    while (_retransmission_queue.size()) {
+        element = _retransmission_queue.front();
+        if (unwrap(element.header().seqno, _isn, 0) + element.length_in_sequence_space() > unwrap(ackno, _isn, 0))
+            break;
+        _retransmission_queue.pop();
+    }
+
+    // If the retransmission queue is not empty, start the timer
+    if (_retransmission_queue.size()) {
+        timer.start(_rto);
+    }
+
+    //  Reset consecutive retransmission times
+    _consecutive_retran = 0;
 }
 
 //! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
@@ -137,16 +161,20 @@ unsigned int TCPSender::consecutive_retransmissions() const {
     return _consecutive_retran;
 }
 
+// Send the segment has zero length in sequence space and with the sequence number set correctly
 void TCPSender::send_empty_segment() {
     TCPHeader header;
 
-    if (!_stream.bytes_read()) {
-        header.syn = true;
-    }
+    // if (!_stream.bytes_read()) {
+    //     header.syn = true;
+    // }
 
-    if (_stream.eof()) {
-        header.fin = true;
-    }
+    // if (_stream.eof()) {
+    //     header.fin = true;
+    // }
+
+    // Set the sequence number
+    header.seqno = next_seqno();
 
     TCPSegment segment;
     segment.header() = header;
