@@ -96,14 +96,13 @@ void TCPSender::fill_window() {
             bytes2read = TCPConfig::MAX_PAYLOAD_SIZE;
         }
 
-        if (_stream.eof() && _state == SYN_SENT) {
+        Buffer payload(std::move(_stream.read(bytes2read)));
+
+        if (_stream.eof() && _state == SYN_SENT && (header.syn == true) + payload.size() + 1 <= _window_size) {
             header.fin = true;
             _next_seqno++; 
-            bytes2read--;
             _state = FIN_SENT;
         }
-
-        Buffer payload(std::move(_stream.read(bytes2read)));
 
         _next_seqno += payload.size();
 
