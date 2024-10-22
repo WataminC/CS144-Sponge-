@@ -56,8 +56,9 @@ class TCPSender {
 
     // There is difference between the persperctive of the sender's window size and the actual receiver's window size
     uint16_t _window_size;
-    uint16_t _actual_window;
     WrappingInt32 _ack;
+
+    bool _window_probe;
 
     enum {
       INIT,
