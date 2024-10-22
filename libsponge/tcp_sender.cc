@@ -52,11 +52,12 @@ void TCPSender::retransmit() {
         if (_last_retrans_seqno.has_value() && _last_retrans_seqno.value() == segment.header().seqno) {
             _consecutive_retran++; 
         } else {
+            // Reset consecutive retransmission times
             _consecutive_retran = 1;
             _last_retrans_seqno = segment.header().seqno;
         }
 
-        // Double RTO
+        // Double RTO when it is not the "probe" state
         if (!_window_probe) {
             _rto *= 2;
         }
@@ -81,13 +82,12 @@ uint64_t TCPSender::bytes_in_flight() const {
 
 void TCPSender::fill_window() {
     while (_window_size - bytes_in_flight() && _state != FIN_SENT) {
-        TCPHeader header;
-        header.seqno = next_seqno();
+        TCPSegment segment;
+        segment.header().seqno = next_seqno();
 
         size_t bytes2read = _window_size - bytes_in_flight();
         if (!_stream.bytes_read() && _state == INIT) {
-            header.syn = true;
-            _next_seqno++; 
+            segment.header().syn = true;
             bytes2read--;
             _state = SYN_SENT;
         }
@@ -96,26 +96,25 @@ void TCPSender::fill_window() {
             bytes2read = TCPConfig::MAX_PAYLOAD_SIZE;
         }
 
-        Buffer payload(std::move(_stream.read(bytes2read)));
+        segment.payload() = std::move(_stream.read(bytes2read));
 
-        if (_stream.eof() && _state == SYN_SENT && (header.syn == true) + payload.size() + 1 <= _window_size - bytes_in_flight()) {
-            header.fin = true;
-            _next_seqno++; 
+        // If stream is end and there is some places that can hold the fin 
+        if (_stream.eof() && _state == SYN_SENT && segment.length_in_sequence_space() + 1 <= _window_size - bytes_in_flight()) {
+            segment.header().fin = true;
             _state = FIN_SENT;
         }
 
-        _next_seqno += payload.size();
-
-        TCPSegment segment;
-        segment.header() = header;
-        segment.payload() = payload;
-
+        // Break when there are no bytes to read to avoid infinite loop
         if (!segment.length_in_sequence_space())
             break;
+
+        _next_seqno += segment.length_in_sequence_space();
         
+        // Send the segment and record it in the retransmission queue
         _segments_out.push(segment);
         _retransmission_queue.push(segment);
 
+        // If the segment do occupy some sequence space(Not Empty!), start timer!
         if (!timer.is_running() && segment.length_in_sequence_space() > 0) {
             timer.start(_rto);
         }
@@ -126,14 +125,15 @@ void TCPSender::fill_window() {
 //! \param window_size The remote receiver's advertised window size
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size) {
     _window_size = window_size;
+    _window_probe = false;
 
+    // If window size is 0, treat it like it is 1 but enter "probe" state
     if (!_window_size) {
         _window_size = 1;
         _window_probe = true;
-    } else {
-        _window_probe = false;
     }
 
+    // Do nothing when ackno bigger the last sent bytes seqno or ackno smaller than the original _ack
     if (unwrap(ackno, _isn, 0) > next_seqno_absolute() || unwrap(ackno, _isn, 0) <= unwrap(_ack, _isn, 0)) {
         return ;
     }
@@ -173,14 +173,8 @@ unsigned int TCPSender::consecutive_retransmissions() const {
 
 // Send the segment has zero length in sequence space and with the sequence number set correctly
 void TCPSender::send_empty_segment() {
-    TCPHeader header;
-
-    // Set the sequence number
-    header.seqno = next_seqno();
-
     TCPSegment segment;
-    segment.header() = header;
+    segment.header().seqno = next_seqno();
     
     _segments_out.push(segment);
-    _retransmission_queue.push(segment);
 }
