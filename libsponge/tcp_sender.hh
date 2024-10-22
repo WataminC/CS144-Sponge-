@@ -53,7 +53,10 @@ class TCPSender {
     uint64_t _outstanding_bytes;
     unsigned int _consecutive_retran;
     unsigned int _rto;
+
+    // There is difference between the persperctive of the sender's window size and the actual receiver's window size
     uint16_t _window_size;
+    uint16_t _actual_window;
     WrappingInt32 _ack;
 
     enum {

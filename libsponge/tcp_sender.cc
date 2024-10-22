@@ -47,21 +47,19 @@ void TCPSender::retransmit() {
     _segments_out.push(segment);
 
     // If window is empty, don't retransmit.
-    if (!_window_size) {
-        return ;
+    if (_window_size) {
+        // Count consecutive retransmission 
+        if (_last_retrans_seqno.has_value() && _last_retrans_seqno.value() == segment.header().seqno) {
+            _consecutive_retran++; 
+        } else {
+            _consecutive_retran = 1;
+            _last_retrans_seqno = segment.header().seqno;
+        }
+
+        // Double RTO
+        _rto *= 2;
     }
-
-    // Count consecutive retransmission 
-    if (_last_retrans_seqno.has_value() && _last_retrans_seqno.value() == segment.header().seqno) {
-        _consecutive_retran++; 
-    } else {
-        _consecutive_retran = 0;
-        _last_retrans_seqno = segment.header().seqno;
-    }
-
-    // Double RTO
-    _rto *= 2;
-
+    
     // Reset and start timer
     timer.start(_rto);
 }
@@ -73,7 +71,7 @@ TCPSender::TCPSender(const size_t capacity, const uint16_t retx_timeout, const s
     : _isn(fixed_isn.value_or(WrappingInt32{random_device()()}))
     , _initial_retransmission_timeout{retx_timeout}
     , _stream(capacity), _outstanding_bytes(0), _consecutive_retran(0), _rto(retx_timeout)
-    , _window_size{1}, _ack(_isn) {}
+    , _window_size{1}, _actual_window{0}, _ack(_isn) {}
 
 uint64_t TCPSender::bytes_in_flight() const {
     return _next_seqno - unwrap(_ack, _isn, 0);
@@ -118,7 +116,7 @@ void TCPSender::fill_window() {
 
         _window_size -= segment.length_in_sequence_space();
 
-        if (!timer.is_running() && segment.payload().size() > 0) {
+        if (!timer.is_running() && segment.length_in_sequence_space() > 0) {
             timer.start(_rto);
         }
     }
@@ -127,11 +125,11 @@ void TCPSender::fill_window() {
 //! \param ackno The remote receiver's ackno (acknowledgment number)
 //! \param window_size The remote receiver's advertised window size
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size) {
-    if (unwrap(ackno, _isn, 0) > next_seqno_absolute()) {
+    _window_size = window_size;
+    if (unwrap(ackno, _isn, 0) > next_seqno_absolute() || unwrap(ackno, _isn, 0) <= unwrap(_ack, _isn, 0)) {
         return ;
     }
     _ack = ackno;
-    _window_size = window_size;
 
     // Reset rto
     _rto = _initial_retransmission_timeout;
@@ -148,6 +146,8 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
     // If the retransmission queue is not empty, start the timer
     if (_retransmission_queue.size()) {
         timer.start(_rto);
+    } else {
+        timer.stop();
     }
 
     //  Reset consecutive retransmission times
