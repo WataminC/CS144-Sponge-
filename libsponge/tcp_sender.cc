@@ -14,27 +14,25 @@ void DUMMY_CODE(Targs &&... /* unused */) {}
 
 using namespace std;
 
-void RetransmissionTimer::start(const unsigned int timeout) {
-    rto = std::chrono::milliseconds(timeout);
-    running.store(true);
+void RetransmissionTimer::start(const size_t timeout) {
+    rto = timeout;
+    running = true;
 }
 
 bool RetransmissionTimer::is_running() {
-    return running.load();
+    return running;
 }
 
 void RetransmissionTimer::stop() {
-    running.store(false);
+    running = false;
 }
 
 void RetransmissionTimer::time_passed(const size_t ms_since_last_tick, std::function<void()> callback) {
     if (!this->is_running())
         return ;
 
-    std::chrono::milliseconds elapsed = std::chrono::milliseconds(ms_since_last_tick);
-
-    if (rto > elapsed) {
-        rto -= elapsed;
+    if (rto > ms_since_last_tick) {
+        rto -= ms_since_last_tick;
         return ;
     }
 

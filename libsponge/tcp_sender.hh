@@ -8,17 +8,18 @@
 
 #include <functional>
 #include <queue>
-#include <optional>
+// #include <optional>
 #include <chrono>
-#include <atomic>
+// #include <atomic>
 
 class RetransmissionTimer {
   private:
-    std::chrono::milliseconds rto;  // Retransmission timeout
-    std::atomic<bool> running;
+    size_t rto;  // Retransmission timeout
+    // std::atomic<bool> running;
+    bool running;
 
   public:
-    void start(const unsigned int timeout);
+    void start(const size_t timeout);
     void stop();
     bool is_running();
     void time_passed(const size_t ms_since_last_tick, std::function<void()> callback);
