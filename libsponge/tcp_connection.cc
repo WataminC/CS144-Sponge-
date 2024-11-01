@@ -92,6 +92,11 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
     // Send the time to the sender
     _sender.tick(ms_since_last_tick);
 
+    // Send the segments to TCPConnection if retransmission happened
+    if (!_sender.segments_out().empty()) {
+        this->send_segment();
+    }
+
     // If consecutive retransmission times is more than the maximum accepted tiems, abort the connection
     // if (_sender.consecutive_retransmiss > TCPCONFIG::MAXIMUX) ......
 
