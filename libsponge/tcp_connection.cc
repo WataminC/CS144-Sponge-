@@ -37,9 +37,14 @@ size_t TCPConnection::unassembled_bytes() const {
     return _receiver.unassembled_bytes();
 }
 
-size_t TCPConnection::time_since_last_segment_received() const { return {}; }
+size_t TCPConnection::time_since_last_segment_received() const {
+    return _tick - _rece_tick;
+}
 
 void TCPConnection::segment_received(const TCPSegment &seg) {
+    // Record tick to get the segment received time
+    _rece_tick = _tick;
+
 	/* 
      *  Check does RST flag has been set or not.
 	 *	If the RST flag is set, set both the inbound and outbound streams to the error state
@@ -60,6 +65,10 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     // If ACK flag is set, transfer ackno and window_size from segment to TCPSender
     if (seg.header().ack) {
         _sender.ack_received(seg.header().ackno, seg.header().win);
+
+        if (_end_intput && !this->bytes_in_flight()) {
+            this->end_input_stream();
+        }
     }
 
     // At least one segment is sent to reply when the incoming segment occupied any seqeence numbers
@@ -89,16 +98,28 @@ size_t TCPConnection::write(const string &data) {
 
 //! \param[in] ms_since_last_tick number of milliseconds since the last call to this method
 void TCPConnection::tick(const size_t ms_since_last_tick) {
+    _tick += ms_since_last_tick;
+    if (time_since_last_segment_received() >= 10*_cfg.rt_timeout) {
+        _linger_after_streams_finish = false;
+        _close = true;
+    }
+
     // Send the time to the sender
     _sender.tick(ms_since_last_tick);
 
     // If consecutive retransmission times is more than the maximum accepted tiems, abort the connection
-    // if (_sender.consecutive_retransmiss > TCPCONFIG::MAXIMUX) ......
+    if (_sender.consecutive_retransmissions() > TCPConfig::MAX_RETX_ATTEMPTS) {
+        _close = true;
+    }
 
     // End the connection cleanly if necessary (To be continued)
 }
 
 void TCPConnection::end_input_stream() {
+    if (this->bytes_in_flight()) {
+        _end_intput = true;
+        return ;
+    }
     _sender.stream_in().end_input();
     _sender.fill_window();
     this->send_segment();

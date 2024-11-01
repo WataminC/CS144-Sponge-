@@ -21,6 +21,9 @@ class TCPConnection {
     //! in case the remote TCPConnection doesn't know we've received its whole stream?
     bool _linger_after_streams_finish{true};
     bool _close;
+    size_t _tick;
+    size_t _rece_tick;
+    bool _end_intput;
 
     void send_segment(void);
 
@@ -84,7 +87,7 @@ class TCPConnection {
     //!@}
 
     //! Construct a new connection from a configuration
-    explicit TCPConnection(const TCPConfig &cfg) : _cfg{cfg}, _close(false) {}
+    explicit TCPConnection(const TCPConfig &cfg) : _cfg{cfg}, _close(false), _tick(0), _rece_tick(0), _end_intput(false) {}
 
     //! \name construction and destruction
     //! moving is allowed; copying is disallowed; default construction not possible
