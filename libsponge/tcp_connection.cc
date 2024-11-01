@@ -59,16 +59,18 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
         _close = true;
     }
 
+    // If receive fin before send fin -> passive close
+    // How to decide does the sender have sent fin or not?
+    if (seg.header().fin && !_sender.stream_in().eof()) {
+        _linger_after_streams_finish = false;
+    }
+
     // Send the segment to the TCPReceiver, if no errors happen
     _receiver.segment_received(seg);
 
     // If ACK flag is set, transfer ackno and window_size from segment to TCPSender
     if (seg.header().ack) {
         _sender.ack_received(seg.header().ackno, seg.header().win);
-
-        if (_end_intput && !this->bytes_in_flight()) {
-            this->end_input_stream();
-        }
     }
 
     // At least one segment is sent to reply when the incoming segment occupied any seqeence numbers
@@ -117,7 +119,27 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
         _close = true;
     }
 
-    // End the connection cleanly if necessary (To be continued)
+    // Any point where prerequisites #1 through #3 are satisfied, the connection is "done" if _linger_after_streams_finish is false
+    if (_linger_after_streams_finish) {
+        return ;
+    }
+
+    // Prereq #1: The inbound stream has been fully assembled and has ended
+    if (_receiver.unassembled_bytes() && _receiver.stream_out().eof()) {
+        return ;
+    }
+
+    // Prereq #2: THe outbound stream has been ended by the local application and fully sent
+    if (!_sender.stream_in().eof()) {
+        return ;
+    }
+
+    // Prereq #3: The outbound stream hass been fully acknowledged by the remote peer
+    if (!_sender.bytes_in_flight()) {
+        return ;
+    }
+
+    _close = false;
 }
 
 void TCPConnection::end_input_stream() {
