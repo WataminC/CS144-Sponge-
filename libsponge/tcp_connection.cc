@@ -137,7 +137,10 @@ bool TCPConnection::active() const {
 }
 
 size_t TCPConnection::write(const string &data) {
-    return _sender.stream_in().write(data);
+    size_t size = _sender.stream_in().write(data);
+    _sender.fill_window();
+    this->send_segment();
+    return size; 
 }
 
 //! \param[in] ms_since_last_tick number of milliseconds since the last call to this method
@@ -147,6 +150,10 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
         _linger_after_streams_finish = false;
         _close = true;
     }
+
+    // Fill the window every times call the tick
+    _sender.fill_window();
+    this->send_segment();
 
     // Send the time to the sender
     _sender.tick(ms_since_last_tick);
