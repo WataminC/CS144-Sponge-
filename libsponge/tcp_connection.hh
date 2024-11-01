@@ -24,8 +24,10 @@ class TCPConnection {
     size_t _tick;
     size_t _rece_tick;
     bool _end_intput;
+    std::optional<WrappingInt32> _isn_receiver;
 
     void send_segment(void);
+    bool check_segment_in_window(const TCPSegment &);
 
   public:
     //! \name "Input" interface for the writer
@@ -87,7 +89,7 @@ class TCPConnection {
     //!@}
 
     //! Construct a new connection from a configuration
-    explicit TCPConnection(const TCPConfig &cfg) : _cfg{cfg}, _close(false), _tick(0), _rece_tick(0), _end_intput(false) {}
+    explicit TCPConnection(const TCPConfig &cfg) : _cfg{cfg}, _close(false), _tick(0), _rece_tick(0), _end_intput(false), _isn_receiver(std::nullopt) {}
 
     //! \name construction and destruction
     //! moving is allowed; copying is disallowed; default construction not possible

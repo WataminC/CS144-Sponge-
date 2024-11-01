@@ -25,6 +25,43 @@ void TCPConnection::send_segment() {
     }
 }
 
+bool TCPConnection::check_segment_in_window(const TCPSegment &seg) {
+    // Check does sender and receiver has initialized.
+    if (!_isn_receiver.has_value() || !_receiver.ackno().has_value()) {
+        return true;
+    }
+
+    uint64_t seg_start = unwrap(seg.header().seqno, _isn_receiver.value(), 0);
+    uint64_t seg_end = seg_start + (seg.length_in_sequence_space() == 0 ? 0 : seg.length_in_sequence_space() - 1);
+    uint64_t window_start = unwrap(_receiver.ackno().value(), _isn_receiver.value(), 0);
+    uint64_t window_end = window_start + _receiver.window_size();
+
+    // If segment less than the window
+    if (seg_end < window_start) {
+        // Log message
+        // std::cerr << "unwrap(seg.header().seqno, _isn_receiver.value(), 0): " << unwrap(seg.header().seqno, _isn_receiver.value(), 0) << "\n";
+        // std::cerr << "seg.length_in_sequence_space(): " << seg.length_in_sequence_space() << "\n";
+        // std::cerr << "unwrap(_receiver.ackno().value(), _isn_receiver.value(), 0): " << unwrap(_receiver.ackno().value(), _isn_receiver.value(), 0) << "\n";
+        // std::cerr << "seg_end: " << seg_end << "\n";
+        // std::cerr << "window_start: " << window_start << "\n";
+        return false;
+    }
+
+    // If segment bigger than the window
+    if (seg_start >= window_end) {
+        // Log message
+        // std::cerr << "unwrap(seg.header().seqno, _isn_receiver.value(), 0): " << unwrap(seg.header().seqno, _isn_receiver.value(), 0) << "\n";
+        // std::cerr << "seg.length_in_sequence_space(): " << seg.length_in_sequence_space() << "\n";
+        // std::cerr << "unwrap(_receiver.ackno().value(), _isn_receiver.value(), 0): " << unwrap(_receiver.ackno().value(), _isn_receiver.value(), 0) << "\n";
+        // std::cerr << "_receiver.window_size()" << _receiver.window_size() << "\n";
+        // std::cerr << "seg_start: " << seg_start << "\n";
+        // std::cerr << "window_end" << window_end << "\n";
+        return false;
+    }
+    
+    return true;
+}
+
 size_t TCPConnection::remaining_outbound_capacity() const {
     return _sender.stream_in().remaining_capacity();
 }
@@ -59,14 +96,20 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
         _close = true;
     }
 
+    // Record the receiver's isn
+    if (seg.header().syn) {
+        _isn_receiver = seg.header().seqno;
+    }
+
     // If receive fin before send fin -> passive close
-    // How to decide does the sender have sent fin or not?
     if (seg.header().fin && !_sender.stream_in().eof()) {
         _linger_after_streams_finish = false;
     }
 
     // Send the segment to the TCPReceiver, if no errors happen
-    _receiver.segment_received(seg);
+    if (this->check_segment_in_window(seg)) {
+        _receiver.segment_received(seg);
+    }
 
     // If ACK flag is set, transfer ackno and window_size from segment to TCPSender
     if (seg.header().ack) {
@@ -76,9 +119,8 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     // At least one segment is sent to reply when the incoming segment occupied any seqeence numbers
     if (seg.length_in_sequence_space()) {
         // How to make sure it?
-        size_t size = _sender.segments_out().size();
         _sender.fill_window();
-        if (size == _sender.segments_out().size()) {
+        if (_sender.segments_out().empty()) {
             _sender.send_empty_segment();
         }
     }
