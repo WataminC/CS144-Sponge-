@@ -21,7 +21,7 @@ void TCPConnection::send_segment() {
             seg.header().win = _receiver.window_size();
         }
         _sender.segments_out().pop();
-        _segments_out.push(seg);
+        _segments_out.push(std::move(seg));
     }
 }
 
@@ -60,6 +60,24 @@ bool TCPConnection::check_segment_in_window(const TCPSegment &seg) {
     }
     
     return true;
+}
+
+void TCPConnection::send_rst(void) {
+    // Send an empty segment to ensure at least one segment in the queue
+    _sender.send_empty_segment();
+
+    // Get the segment from the the queue and set RST flag
+    TCPSegment seg = std::move(_sender.segments_out().front());
+    seg.header().rst = true;
+    while (!_segments_out.empty()) {
+        _segments_out.pop();
+    }
+    _segments_out.push(std::move(seg));
+
+    _sender.stream_in().set_error();
+    _receiver.stream_out().set_error();
+
+    _close = true;
 }
 
 size_t TCPConnection::remaining_outbound_capacity() const {
@@ -146,15 +164,13 @@ size_t TCPConnection::write(const string &data) {
 //! \param[in] ms_since_last_tick number of milliseconds since the last call to this method
 void TCPConnection::tick(const size_t ms_since_last_tick) {
     _tick += ms_since_last_tick;
-    if (time_since_last_segment_received() >= 10*_cfg.rt_timeout) {
-        _linger_after_streams_finish = false;
-        _close = true;
-    }
-
+    
     // Fill the window every times call the tick
-    _sender.fill_window();
-    this->send_segment();
-
+    if (!_sender.stream_in().buffer_empty()) {
+        _sender.fill_window();
+        this->send_segment();
+    }
+    
     // Send the time to the sender
     _sender.tick(ms_since_last_tick);
 
@@ -165,12 +181,7 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
 
     // If consecutive retransmission times is more than the maximum accepted tiems, abort the connection
     if (_sender.consecutive_retransmissions() > TCPConfig::MAX_RETX_ATTEMPTS) {
-        _close = true;
-    }
-
-    // Any point where prerequisites #1 through #3 are satisfied, the connection is "done" if _linger_after_streams_finish is false
-    if (_linger_after_streams_finish) {
-        return ;
+        this->send_rst();
     }
 
     // Prereq #1: The inbound stream has been fully assembled and has ended
@@ -185,6 +196,17 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
 
     // Prereq #3: The outbound stream hass been fully acknowledged by the remote peer
     if (_sender.bytes_in_flight()) {
+        return ;
+    }
+
+    // Every time prerequisites #1 throught #3 are satisfied, it should wait at least 10 times the initial retransmission timeout
+    if (time_since_last_segment_received() >= 10*_cfg.rt_timeout) {
+        _linger_after_streams_finish = false;
+        _close = true;
+    }
+
+    // Any point where prerequisites #1 through #3 are satisfied, the connection is "done" if _linger_after_streams_finish is false
+    if (_linger_after_streams_finish) {
         return ;
     }
 
@@ -208,6 +230,7 @@ TCPConnection::~TCPConnection() {
             cerr << "Warning: Unclean shutdown of TCPConnection\n";
 
             // Your code here: need to send a RST segment to the peer
+            this->send_rst();
         }
     } catch (const exception &e) {
         std::cerr << "Exception destructing TCP FSM: " << e.what() << std::endl;

@@ -27,6 +27,7 @@ class TCPConnection {
     std::optional<WrappingInt32> _isn_receiver;
 
     void send_segment(void);
+    void send_rst(void);
     bool check_segment_in_window(const TCPSegment &);
 
   public:
