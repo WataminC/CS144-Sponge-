@@ -12,6 +12,25 @@ void DUMMY_CODE(Targs &&... /* unused */) {}
 
 using namespace std;
 
+std::string merge_substrings(const std::string &str1, size_t index1, const std::string &str2, size_t index2) {
+    // Determine start and end of each substring in the final combined string
+    size_t start = std::min(index1, index2);
+    size_t end1 = index1 + str1.size();
+    size_t end2 = index2 + str2.size();
+    size_t combined_length = std::max(end1, end2) - start;
+    
+    // Prepare combined string with the correct size
+    std::string result(combined_length, '\0');
+
+    // Copy `str1` into `result` at its relative position
+    std::copy(str1.begin(), str1.end(), result.begin() + (index1 - start));
+
+    // Copy `str2` into `result` at its relative position
+    std::copy(str2.begin(), str2.end(), result.begin() + (index2 - start));
+
+    return result;
+}
+
 StreamReassembler::StreamReassembler(const size_t capacity) : _output(capacity), _capacity(capacity) {}
 
 //! \details This function accepts a substring (aka a segment) of bytes,
@@ -42,76 +61,51 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
         copy_index = willing;
     }
 
+    // Create a container to store the keys
+    std::vector<size_t> key_set;
+
+    // Iterate over the map and collect the keys
+    for (const auto &pair : reassembler) {
+        key_set.push_back(pair.first);
+    }
+    
+    for (auto &key : key_set) {
+        size_t first_start = key;
+        size_t first_end = key + reassembler[key].size() - 1;
+
+        size_t second_start = copy_index;
+        size_t second_end = copy_index + copy_data.size() - 1;
+
+        if (second_end < first_start || first_end < second_start) {
+            continue;
+        }
+        
+        copy_data = std::move(merge_substrings(copy_data, copy_index, reassembler[key], key));
+        copy_index = std::min(first_start, second_start);
+
+        reassembler.erase(key);
+    }
+    reassembler[copy_index] = std::move(copy_data); 
+
     size_t total_reassembler_size = 0;
     for (const auto &pair : reassembler) {
         total_reassembler_size += pair.second.size();
     }
-    size_t remain_size = _capacity - (_output.buffer_size() + total_reassembler_size);
 
-    if (copy_data.size() > remain_size) {   // check does the data fix the capacity
-        size_t size_diff = copy_data.size() - remain_size;
-        size_t copy_diff = size_diff;
+    if ((_output.buffer_size() + total_reassembler_size) > _capacity)  {
+        size_t remain_size = (_output.buffer_size() + total_reassembler_size) - _capacity; 
+        // Sort in decreasing order
+        std::sort(key_set.begin(), key_set.end(), std::greater<int>());
 
-        // the segment size is bigger than the remaining capacity
-        if (size_diff > 0) {
-            // Create a container to store the keys
-            std::vector<size_t> key_set;
-
-            // Iterate over the map and collect the keys
-            for (const auto &pair : reassembler) {
-                key_set.push_back(pair.first);
+        for (auto &key : key_set) {
+            if (reassembler[key].size() <= remain_size) {
+                remain_size -= reassembler[key].size();
+                reassembler.erase(key);
             }
-            // Sort the key decreasingly
-            std::sort(key_set.begin(), key_set.end(), std::greater<int>());
 
-            // Traverse all keys in the reassembler in decreasing order to remove the overlapping parts and the end of the stream that exceeds the capacity.
-            for (auto &key : key_set) {
-                size_t copy_key = key;
-                // No overlapping
-                if (key + reassembler[key].size() < copy_index) {
-                    continue;
-                }
-
-                if (size_diff > reassembler[key].size()) {
-                    size_diff -= reassembler[key].size();
-                    reassembler.erase(key);
-                    continue;
-                }
-
-                bool overflow_flag = false;
-
-                if (key < copy_index + copy_data.size()) {
-                    reassembler[key] = reassembler[key].substr(copy_index + copy_data.size() - key, std::string::npos);
-                    if (size_diff < (copy_index + copy_data.size() - key)) {
-                        overflow_flag = true;
-                    }
-                    size_diff -= (copy_index + copy_data.size() - key);
-                    copy_key += (copy_index + copy_data.size() - key);
-                }
-                
-                if (!overflow_flag) {
-                    reassembler[copy_key] = reassembler[key].substr(0, reassembler[key].size() - size_diff);
-                }
-
-                if (copy_key != key) {
-                    reassembler.erase(key);
-                }
-
-                size_diff = 0;
-                break;
-            }
+            reassembler[key] = reassembler[key].substr(0, reassembler[key].size() - remain_size);
+            break;
         }
-        
-        copy_data = copy_data.substr(0, remain_size + copy_diff - size_diff);
-
-        if (copy_data.empty()) {
-            return ;
-        }
-    }
-
-    auto [it, inserted] = reassembler.emplace(std::make_pair(copy_index, (copy_data)));
-    if (!inserted && (it->second.size() < copy_data.size())) {
-        it->second = std::move(copy_data);
     }
 
     // Reassemble the segment in the reassembler to the _output stream
