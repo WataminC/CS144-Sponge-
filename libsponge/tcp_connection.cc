@@ -38,24 +38,11 @@ bool TCPConnection::check_segment_in_window(const TCPSegment &seg) {
 
     // If segment less than the window
     if (seg_end < window_start) {
-        // Log message
-        // std::cerr << "unwrap(seg.header().seqno, _isn_receiver.value(), 0): " << unwrap(seg.header().seqno, _isn_receiver.value(), 0) << "\n";
-        // std::cerr << "seg.length_in_sequence_space(): " << seg.length_in_sequence_space() << "\n";
-        // std::cerr << "unwrap(_receiver.ackno().value(), _isn_receiver.value(), 0): " << unwrap(_receiver.ackno().value(), _isn_receiver.value(), 0) << "\n";
-        // std::cerr << "seg_end: " << seg_end << "\n";
-        // std::cerr << "window_start: " << window_start << "\n";
         return false;
     }
 
     // If segment bigger than the window
     if (seg_start >= window_end) {
-        // Log message
-        // std::cerr << "unwrap(seg.header().seqno, _isn_receiver.value(), 0): " << unwrap(seg.header().seqno, _isn_receiver.value(), 0) << "\n";
-        // std::cerr << "seg.length_in_sequence_space(): " << seg.length_in_sequence_space() << "\n";
-        // std::cerr << "unwrap(_receiver.ackno().value(), _isn_receiver.value(), 0): " << unwrap(_receiver.ackno().value(), _isn_receiver.value(), 0) << "\n";
-        // std::cerr << "_receiver.window_size()" << _receiver.window_size() << "\n";
-        // std::cerr << "seg_start: " << seg_start << "\n";
-        // std::cerr << "window_end" << window_end << "\n";
         return false;
     }
     
@@ -120,7 +107,9 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     }
 
     // If receive fin before send fin -> passive close
-    if (seg.header().fin && !_sender.stream_in().eof()) {
+    if (seg.header().fin && 
+    (this->state().state_summary(_sender) != TCPSenderStateSummary::FIN_SENT && 
+    this->state().state_summary(_sender) != TCPSenderStateSummary::FIN_ACKED)) {
         _linger_after_streams_finish = false;
     }
 
@@ -164,9 +153,8 @@ size_t TCPConnection::write(const string &data) {
 //! \param[in] ms_since_last_tick number of milliseconds since the last call to this method
 void TCPConnection::tick(const size_t ms_since_last_tick) {
     _tick += ms_since_last_tick;
-    
     // Fill the window every times call the tick
-    if (!_sender.stream_in().buffer_empty()) {
+    if (!_sender.stream_in().buffer_empty() || _sender.stream_in().eof()) {
         _sender.fill_window();
         this->send_segment();
     }
