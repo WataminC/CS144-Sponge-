@@ -185,7 +185,7 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
     }
 
     // Prereq #1: The inbound stream has been fully assembled and has ended
-    if (_receiver.unassembled_bytes() && !_receiver.stream_out().eof()) {
+    if (_receiver.unassembled_bytes() || !_receiver.stream_out().eof()) {
         return ;
     }
 
