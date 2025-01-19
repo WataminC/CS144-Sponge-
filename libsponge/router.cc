@@ -15,6 +15,12 @@ using namespace std;
 
 // You will need to add private members to the class declaration in `router.hh`
 
+unsigned long long construct_binary_with_ones(int n) {
+    // Construct a number with 'n' ones at the start
+    unsigned long long num = ((1ULL << n) - 1) << (32 - n); // 2^n - 1 creates 'n' ones
+    return num;
+}
+
 template <typename... Targs>
 void DUMMY_CODE(Targs &&... /* unused */) {}
 
@@ -29,14 +35,51 @@ void Router::add_route(const uint32_t route_prefix,
     cerr << "DEBUG: adding route " << Address::from_ipv4_numeric(route_prefix).ip() << "/" << int(prefix_length)
          << " => " << (next_hop.has_value() ? next_hop->ip() : "(direct)") << " on interface " << interface_num << "\n";
 
-    DUMMY_CODE(route_prefix, prefix_length, next_hop, interface_num);
     // Your code here.
+    _routerTable.emplace_back(route_prefix, prefix_length, next_hop, interface_num);
 }
 
 //! \param[in] dgram The datagram to be routed
 void Router::route_one_datagram(InternetDatagram &dgram) {
-    DUMMY_CODE(dgram);
     // Your code here.
+    if (dgram.header().ttl <= 1) {
+        // lifetime end
+        return ;
+    }
+
+    dgram.header().ttl -= 1;
+
+    int index = -1;
+    std::size_t maxPrefix = 0;
+    for (std::size_t i = 0; i < _routerTable.size(); ++i) {
+        const auto &t = _routerTable[i];
+        uint32_t route_prefix  = std::get<0>(t);
+        uint8_t prefix_length = std::get<1>(t);
+        uint32_t bitMask = static_cast<uint32_t>(construct_binary_with_ones(prefix_length));
+
+        if ((route_prefix & bitMask) != (dgram.header().dst & bitMask)) {
+            continue;
+        }
+
+        if (prefix_length >= maxPrefix) {
+            index = i;
+            maxPrefix = prefix_length;
+        }
+    }
+
+    if (index == -1) {
+        return ;
+    }
+
+    const auto &t = _routerTable[index];
+    Address next_hop = Address::from_ipv4_numeric(dgram.header().dst);
+    if (std::get<2>(t).has_value()) {
+        next_hop = std::get<2>(t).value();
+        // Address next_hop = std::get<2>(t).value();
+        // _interfaces[std::get<3>(t)].send_datagram(dgram, next_hop);
+    }
+
+    _interfaces[std::get<3>(t)].send_datagram(dgram, next_hop);
 }
 
 void Router::route() {
